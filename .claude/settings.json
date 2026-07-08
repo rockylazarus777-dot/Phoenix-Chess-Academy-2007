@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node shot.js http://localhost:3000 C:/Users/sarav/AppData/Local/Temp/claude/c--Users-sarav-Claude-Projects-PHOENIX-CHESS-ACADEMY-phoenix-chess-academy/d86ee1c2-868f-46e8-8827-db6e7071504f/scratchpad/achievements2.png 5750)"
+    ]
+  }
+}

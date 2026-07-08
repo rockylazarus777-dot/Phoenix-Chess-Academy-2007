@@ -1,0 +1,58 @@
+-- =============================================================================
+-- 0013_admin_operations_rls.sql
+-- =============================================================================
+-- RLS posture for every Phase 10 table: RLS is already enabled (each
+-- table's own CREATE in 0012), and this migration deliberately adds
+-- ZERO policies for `anon` or `authenticated` on any of them — the same
+-- deny-by-default pattern already used for `contact_enquiries`,
+-- `trial_bookings`, `tournament_registrations`, and `reporting_outbox`
+-- in 0010_rls_policies.sql.
+--
+-- WHY NO POLICIES AT ALL (see docs/ADMIN_OPERATIONS_ARCHITECTURE.md,
+-- "Service-Role Security Boundary" and "RLS Status" for the full
+-- writeup):
+--   - A STUDENT/PARENT/COACH being `authenticated` must not gain any
+--     broad read/write access to these tables merely by having a
+--     session — none of Phase 10's business rules are "a student can
+--     read their own row" yet (that requires relationship-scoped
+--     policies deferred to a future portal phase — see "RLS Future
+--     Portal Policies" below).
+--   - All Phase 10 admin reads/writes go through the service-role
+--     client (`src/lib/supabase/admin.ts`), which bypasses RLS
+--     entirely. That means RLS is NOT the enforcement point for admin
+--     operations at all — `requirePermission()`
+--     (`src/lib/auth/permissions.ts`), called at the top of every admin
+--     query module function and every admin Server Action, is the real
+--     enforcement point. RLS here exists purely as a deny-by-default
+--     backstop should any code path ever accidentally use a
+--     non-service-role client against these tables.
+--
+-- This is intentionally the same conclusion Phase 7 reached for
+-- contact_enquiries/trial_bookings/tournament_registrations: RLS with
+-- no policies + a narrow, deliberate service-role/RPC access path, not
+-- a rich policy set.
+--
+-- No policy is added here for a future STAFF/ADMIN/SUPER_ADMIN "policy-
+-- based" access path (e.g. via a has_role() SQL helper) because the
+-- application does not use the anon-key session client for these
+-- tables at all — see "Admin Query Architecture" in
+-- docs/ADMIN_OPERATIONS_ARCHITECTURE.md. Revisit only if that access
+-- pattern changes.
+
+-- (Deliberately no CREATE POLICY statements in this file.)
+
+-- ---------------------------------------------------------------------------
+-- RLS FUTURE PORTAL POLICIES (documented, NOT implemented)
+-- ---------------------------------------------------------------------------
+-- Deferred to the phase that actually builds student/parent/coach
+-- portal data access:
+--   - STUDENT: read own `students` row via `students.profile_id = auth.uid()`.
+--   - PARENT: read linked `students` rows via `student_parents` joined
+--     on `parents.profile_id = auth.uid()`.
+--   - COACH: read students in batches they are assigned to, via
+--     `batch_coaches` + `batch_enrollments` joined on
+--     `coaches.profile_id = auth.uid()`.
+-- None of these are implemented now — secure deny-by-default is
+-- preferred until the portal phases that actually need these reads
+-- exist, per Phase 10 instructions ("Do not implement these until
+-- portal query requirements exist").

@@ -1,0 +1,252 @@
+@import "tailwindcss";
+
+/*
+ * PHOENIX CHESS ACADEMY — DESIGN TOKENS
+ * -------------------------------------
+ * Elite-academy editorial palette: warm ivory/cream/white surfaces, deep
+ * navy for premium emphasis sections, brand gold as the sole accent.
+ * Every component consumes these semantic tokens rather than raw hex
+ * values, so the whole visual system stays tunable from this one file.
+ *
+ * Dark sections (stats, achievements, final CTA, footer) are opted into
+ * via the `.on-dark` class (see Section's `dark` prop), which locally
+ * overrides these same variable names to their navy equivalents. Any
+ * component using bg-background/text-foreground/bg-surface/etc. therefore
+ * renders correctly in both light and dark sections with no per-component
+ * dark-mode classes.
+ */
+:root {
+  /* Surfaces — warm, editorial tonal rhythm across ivory/cream/white */
+  --background: #f7f4ec; /* Warm Ivory — main page background */
+  --surface: #efe9dc; /* Soft Cream — secondary/alternate section background */
+  --surface-elevated: #ffffff; /* White — elevated cards and white sections */
+  --border: rgba(16, 24, 40, 0.1);
+  --border-strong: rgba(16, 24, 40, 0.18);
+
+  /* Brand — Phoenix Gold is primary/CTA; Phoenix Navy is a supporting accent */
+  --primary: #d4a72c; /* Brand Gold */
+  --primary-foreground: #101828; /* Deep navy text on gold backgrounds */
+  --primary-text: #8a6e1e; /* Deepened gold for readable text-on-light (captions/labels) */
+  --brand-gold: #d4a72c;
+  --brand-gold-bright: #e3c066;
+  --brand-gold-deep: #c99a2e; /* Premium Gold */
+
+  --accent: #101828; /* Deep Navy */
+  --accent-foreground: #ffffff;
+  --brand-navy: #101828;
+  --brand-navy-deep: #161b22; /* Charcoal Navy — premium dark section variant */
+
+  /* Text */
+  --foreground: #171717; /* Primary text */
+  --muted-foreground: #667085; /* Secondary text */
+
+  /* Status — used semantically only, never as a brand accent */
+  --success: #2e7d4f;
+  --success-foreground: #ffffff;
+  --warning: #b8860b;
+  --warning-foreground: #1a1a1a;
+  --danger: #b3261e;
+  --danger-foreground: #ffffff;
+
+  /* Focus ring — deepened gold for AA-safe visibility on light surfaces */
+  --ring: #8a6e1e;
+
+  /* Layout */
+  --page-max-width: 1280px;
+}
+
+/*
+ * Dark section override — applied sparingly (academy statistics,
+ * achievements, final CTA, footer) via Section's `dark` prop. Overrides
+ * the semantic surface/text tokens to their navy equivalents; brand gold
+ * stays the same vivid hex since it already reads well on navy.
+ */
+.on-dark {
+  --background: #101828; /* Deep Navy */
+  --surface: #161b22; /* Charcoal Navy */
+  --surface-elevated: #1e2733;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.2);
+
+  --foreground: #ffffff;
+  --muted-foreground: #a9b4c4;
+  --primary-text: #e3c066; /* bright gold reads clearly on navy */
+
+  --ring: #d4a72c;
+
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-text: var(--primary-text);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-brand-gold: var(--brand-gold);
+  --color-brand-gold-bright: var(--brand-gold-bright);
+  --color-brand-gold-deep: var(--brand-gold-deep);
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-navy-deep: var(--brand-navy-deep);
+
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+
+  --color-ring: var(--ring);
+
+  --font-heading: var(--font-space-grotesk);
+  --font-body: var(--font-inter);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+/* Visible keyboard focus state, used across all interactive elements */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Skip link — visually hidden until focused */
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: -3rem;
+  z-index: 100;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.25rem;
+  font-weight: 600;
+  transition: top 0.15s ease;
+}
+
+.skip-link:focus {
+  top: 1rem;
+}
+
+/*
+ * TYPOGRAPHY SCALE
+ * ----------------
+ * Semantic text styles used across the site. Prefer these classes over
+ * ad-hoc font-size/weight combinations so type is consistent everywhere.
+ * Headings use Space Grotesk; body copy uses Inter.
+ */
+@layer components {
+  .text-display {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.05;
+    font-size: clamp(2.5rem, 4.5vw + 1rem, 5rem);
+  }
+
+  .text-h1 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+    font-size: clamp(2rem, 2.5vw + 1rem, 3.25rem);
+  }
+
+  .text-h2 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    line-height: 1.15;
+    font-size: clamp(1.65rem, 1.6vw + 1rem, 2.5rem);
+  }
+
+  .text-h3 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    line-height: 1.2;
+    font-size: clamp(1.35rem, 1vw + 1rem, 1.85rem);
+  }
+
+  .text-h4 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    line-height: 1.25;
+    font-size: clamp(1.125rem, 0.5vw + 1rem, 1.375rem);
+  }
+
+  .text-body-lg {
+    font-family: var(--font-body);
+    font-weight: 400;
+    line-height: 1.6;
+    font-size: 1.125rem;
+  }
+
+  .text-body {
+    font-family: var(--font-body);
+    font-weight: 400;
+    line-height: 1.6;
+    font-size: 1rem;
+  }
+
+  .text-body-sm {
+    font-family: var(--font-body);
+    font-weight: 400;
+    line-height: 1.55;
+    font-size: 0.875rem;
+  }
+
+  .text-caption {
+    font-family: var(--font-body);
+    font-weight: 500;
+    line-height: 1.4;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .text-nav {
+    font-family: var(--font-body);
+    font-weight: 500;
+    line-height: 1.2;
+    font-size: 0.9rem;
+    letter-spacing: 0.01em;
+  }
+
+  .text-button {
+    font-family: var(--font-body);
+    font-weight: 600;
+    line-height: 1;
+    font-size: 0.9rem;
+    letter-spacing: 0.02em;
+  }
+}
