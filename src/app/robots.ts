@@ -7,9 +7,10 @@ import { getSiteUrl } from "@/config/site";
  * server-side role checks (src/lib/auth/requireRole.ts), not from this
  * file; disallowing a path here only asks well-behaved crawlers not to
  * index it. Auth routes (/login, /forgot-password, /reset-password,
- * /auth/callback) are included here as additional crawler guidance on
- * top of their own per-page `noindex` metadata (buildMetadata({ index:
- * false })) — belt-and-suspenders, not a substitute for it.
+ * /accept-invite, /auth/callback) are included here as additional crawler
+ * guidance on top of their own per-page `noindex` metadata
+ * (buildMetadata({ index: false })) — belt-and-suspenders, not a
+ * substitute for it.
  */
 export default function robots(): MetadataRoute.Robots {
   const siteUrl = getSiteUrl();
@@ -27,6 +28,7 @@ export default function robots(): MetadataRoute.Robots {
         "/login",
         "/forgot-password",
         "/reset-password",
+        "/accept-invite",
         "/auth/callback",
       ],
     },

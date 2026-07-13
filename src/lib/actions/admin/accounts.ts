@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getAdminSupabaseClient, isAdminSupabaseConfigured } from "@/lib/supabase/admin";
+import { getSiteUrl } from "@/config/site";
 import { recordAdminAudit } from "@/lib/admin/audit";
 import { getSafeAdminMessage, logAdminEvent, type AdminActionResult } from "@/lib/admin/errors";
 import {
@@ -37,6 +38,21 @@ type ProvisionableTable = "students" | "parents" | "coaches";
  *     (same manual-follow-up pattern as Phase 9's SUPER_ADMIN bootstrap).
  *     We never attempt an automatic second invite on retry, since that
  *     could create a duplicate auth user.
+ *
+ * `inviteUserByEmail`'s `redirectTo` explicitly targets
+ * `/auth/callback?next=/accept-invite` — mirroring the same
+ * `redirectTo`-into-`/auth/callback` pattern `requestPasswordReset()`
+ * uses in src/lib/actions/auth.ts. Without this, Supabase falls back to
+ * the bare Site URL, which has no code to handle the invite link at all.
+ *
+ * The inserted `profiles` row is `active: false`, not `true` — an
+ * invited user's session (created the instant they exchange the invite
+ * code) must not by itself satisfy `requireRole()`'s active check.
+ * `activate_own_profile()` (SECURITY DEFINER RPC,
+ * supabase/migrations/0029_profile_activation.sql) is the only path that
+ * ever flips it to `true`, and only after the invited user actually
+ * creates a password. See docs/AUTH_ARCHITECTURE.md, "Accept Invite
+ * Architecture".
  */
 async function provisionAccount(
   table: ProvisionableTable,
@@ -93,6 +109,7 @@ async function provisionAccount(
 
     const { data: invited, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(row.email, {
       data: { full_name: row.full_name },
+      redirectTo: `${getSiteUrl()}/auth/callback?next=${encodeURIComponent("/accept-invite")}`,
     });
 
     if (inviteError || !invited?.user) {
@@ -109,13 +126,20 @@ async function provisionAccount(
 
     const authUserId = invited.user.id;
 
+    // active: false — the invited user is not granted portal access
+    // (requireRole()'s active check) until they actually create a
+    // password. activate_own_profile() (SECURITY DEFINER RPC, called by
+    // acceptInvite() only after supabase.auth.updateUser({ password })
+    // succeeds) is the only path that ever flips this to true for an
+    // invited account. See docs/AUTH_ARCHITECTURE.md, "Accept Invite
+    // Architecture".
     const { error: profileError } = await supabase.from("profiles").insert({
       id: authUserId,
       full_name: row.full_name,
       email: row.email,
       phone: row.phone,
       role,
-      active: true,
+      active: false,
     } as never);
 
     if (profileError) {

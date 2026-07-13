@@ -313,6 +313,106 @@ or symbol-count rules. This is the one auth schema that enforces a real
 requirement, since it's setting a brand-new credential rather than
 checking an existing one.
 
+## Accept Invite Architecture
+
+`/accept-invite` (`src/app/(auth)/accept-invite/page.tsx`, `AcceptInviteForm`,
+`acceptInvite()` in `src/lib/actions/auth.ts`) is the destination for the
+student/parent/coach account-invitation flow built in
+`src/lib/actions/admin/accounts.ts` (see
+docs/ADMIN_OPERATIONS_ARCHITECTURE.md, "Account Provisioning"). It exists
+because `supabase.auth.admin.inviteUserByEmail()` needs an explicit
+`redirectTo` — without one, Supabase falls back to the bare Site URL,
+which has no code to handle an invite link at all.
+
+Flow:
+
+1. `provisionAccount()` calls `inviteUserByEmail(email, { data, redirectTo:
+   getSiteUrl() + "/auth/callback?next=/accept-invite" })` — the same
+   `redirectTo`-into-`/auth/callback` pattern `requestPasswordReset()`
+   already uses for `/reset-password` — and inserts the `profiles` row
+   with **`active: false`** (see "Account Activation Lifecycle" below).
+2. The invited user clicks the email link -> `/auth/callback?code=...
+   &next=/accept-invite` -> `exchangeCodeForSession(code)` establishes a
+   session -> `next` is validated by `resolveSafeInternalPath()` -> redirect
+   to `/accept-invite`. If the code is missing or the exchange fails (an
+   expired/already-consumed invite — including the common case of an
+   email client or security scanner pre-fetching and consuming the
+   single-use link before the real click), `/auth/callback` redirects to
+   `/accept-invite` itself rather than `/login`, specifically when
+   `next=/accept-invite` — that page's own no-session branch (step 3)
+   renders the friendly expired message. The password-reset failure path
+   (`next=/reset-password`) is untouched: it still redirects to
+   `/login?error=SESSION_ERROR`, exactly as before.
+3. `AcceptInvitePage` (Server Component) calls `getCurrentUser()` itself
+   before rendering: no valid session (an expired, already-used, or never-
+   exchanged invite link) shows a friendly "Invitation expired — ask your
+   administrator to send a new invitation" message instead of a broken
+   form. This is a stricter, page-level check than `/reset-password` uses,
+   since an invite is often the very first thing a new user does and
+   should never show a confusing form under it.
+4. `AcceptInviteForm` collects a new password (same `resetPasswordSchema`
+   as `/reset-password` — no separate password-rule schema was
+   introduced) and calls `acceptInvite()`.
+5. `acceptInvite()` re-checks the session itself (`supabase.auth.getUser()`),
+   calls `supabase.auth.updateUser({ password })`, then calls
+   `finishAcceptInvite()`, which activates the profile (see below) and —
+   **unlike** `updatePassword()` — does **not** sign the session back out
+   on success. It resolves `getCurrentProfile()` and redirects straight to
+   `getRoleHome(profile.role)`, since accepting an invite should land the
+   user directly in their portal. A missing profile still signs the
+   session out and denies access, matching every other auth path's
+   behavior.
+
+### Account Activation Lifecycle
+
+An invited account must never gain portal access before the invited
+user actually creates a password — the Supabase session created by
+merely exchanging the invite code is not, by itself, sufficient.
+`provisionAccount()` therefore inserts the `profiles` row with
+**`active: false`**, not `true`. `requireRole()`'s existing active check
+means such a profile is blocked from every protected route exactly like
+a deactivated one, until it is explicitly activated:
+
+- `activate_own_profile()` (SECURITY DEFINER RPC,
+  `supabase/migrations/0029_profile_activation.sql`) is the **only** path
+  that ever flips an invited profile's `active` to `true`. It is
+  zero-argument, always scoped to `auth.uid()` internally — never a
+  caller-supplied profile id — and its `UPDATE` is conditioned atomically
+  on a separate column, `invite_accepted_at is null`, in its own `WHERE`
+  clause. This makes activation a strictly **one-time** transition:
+  calling it again once `invite_accepted_at` is already set is a
+  harmless no-op (`returns false`), and — critically — it can never be
+  used to silently reactivate an account an admin has since deactivated
+  via `deactivateAccount()`, since that account's `invite_accepted_at` is
+  already non-null from its original onboarding.
+- `invite_accepted_at` is a separate, one-way lifecycle marker,
+  deliberately not folded into `active` — `active` remains the
+  admin-togglable "is this account currently allowed in" flag;
+  `invite_accepted_at` instead records "has this profile ever completed
+  its own first-password-creation step," and is never touched by
+  `deactivateAccount()`/`reactivateAccount()`.
+- `finishAcceptInvite()` (`src/lib/actions/auth.ts`, shared by
+  `acceptInvite()` and `retryProfileActivation()`) calls
+  `supabase.rpc("activate_own_profile")` through the ordinary anon-key
+  server client — no service-role client is involved, since the RPC's
+  own `SECURITY DEFINER` privilege (not a broadened client) is what lets
+  it write a row `profiles`' RLS otherwise grants no write policy for at
+  all (`profiles_select_own` remains SELECT-only — see "Profile RLS
+  Review"). The client can still never reach `profiles.active` directly:
+  `Insert`/`Update` are typed `never` in `src/lib/supabase/types.ts`.
+- If the password update succeeds but `activate_own_profile()` fails (or
+  reports the profile still inactive), `acceptInvite()` returns
+  `{ success: false, activationFailed: true }` rather than pretending
+  onboarding finished. `AcceptInviteForm` reads that flag and swaps to a
+  distinct "Retry Activation" view — no password fields, since the
+  password is already set — whose button calls
+  `retryProfileActivation()`, which re-verifies the session and re-runs
+  `finishAcceptInvite()` alone.
+
+`/accept-invite` is excluded from the sitemap and disallowed in
+`robots.ts`, and uses `buildMetadata({ index: false })`, identically to
+every other auth route.
+
 ## Password UI Security
 
 `PasswordField` (`src/components/forms/PasswordField.tsx`) defaults to

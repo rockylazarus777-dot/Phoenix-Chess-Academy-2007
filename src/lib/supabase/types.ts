@@ -50,6 +50,11 @@ interface ProfileRow {
   phone: string | null;
   role: UserRole;
   active: boolean;
+  // Set exactly once, by activate_own_profile() (0029_profile_activation.sql),
+  // the moment an invited user creates their first password. Never
+  // touched by deactivateAccount()/reactivateAccount() — see
+  // docs/AUTH_ARCHITECTURE.md, "Accept Invite Architecture".
+  invite_accepted_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1911,6 +1916,17 @@ export interface Database {
       resolve_certificate_download: {
         Args: { target_certificate_id: string };
         Returns: CertificateDownloadResolutionRow[];
+      };
+      // ACCEPT INVITE — the only path that flips profiles.active true as
+      // part of invite acceptance (see
+      // supabase/migrations/0029_profile_activation.sql). Zero-argument:
+      // always scoped to auth.uid() internally. Returns true only when
+      // this call was the one that actually activated the profile; false
+      // for an already-activated profile or no matching row — never an
+      // error for either of those two ordinary cases.
+      activate_own_profile: {
+        Args: Record<string, never>;
+        Returns: boolean;
       };
     };
     Enums: Record<string, never>;

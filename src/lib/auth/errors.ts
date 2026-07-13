@@ -16,6 +16,8 @@ export type AuthErrorCode =
   | "RESET_REQUEST_ACCEPTED"
   | "RESET_FAILED"
   | "SESSION_ERROR"
+  | "INVITE_EXPIRED"
+  | "ACTIVATION_FAILED"
   | "UNKNOWN";
 
 const SAFE_MESSAGES: Record<AuthErrorCode, string> = {
@@ -30,6 +32,10 @@ const SAFE_MESSAGES: Record<AuthErrorCode, string> = {
   RESET_REQUEST_ACCEPTED: "If an eligible Phoenix account exists for this email, password reset instructions will be sent.",
   RESET_FAILED: "This password reset link is invalid or has expired. Please request a new one.",
   SESSION_ERROR: "Your session could not be verified. Please sign in again.",
+  INVITE_EXPIRED:
+    "This invitation link is invalid or has expired. Please ask your Phoenix Chess Academy administrator to send a new invitation.",
+  ACTIVATION_FAILED:
+    "Your password was created, but we couldn't finish activating your account. Please try again — if this keeps happening, contact Phoenix Chess Academy for assistance.",
   UNKNOWN: "Something went wrong. Please try again, or contact us directly.",
 };
 
@@ -53,7 +59,14 @@ export function getSafeAuthMessage(code: AuthErrorCode): string {
  * abuse patterns without building a log of who attempted to log in.
  */
 export function logAuthEvent(params: {
-  event: "login" | "logout" | "forgot_password" | "reset_password" | "auth_callback" | "profile_resolution";
+  event:
+    | "login"
+    | "logout"
+    | "forgot_password"
+    | "reset_password"
+    | "auth_callback"
+    | "accept_invite"
+    | "profile_resolution";
   code: AuthErrorCode;
   correlationId?: string;
 }) {

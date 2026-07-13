@@ -168,6 +168,130 @@ export async function updatePassword(input: ResetPasswordValues): Promise<AuthAc
 }
 
 /**
+ * `acceptInvite()`'s result additionally distinguishes "the password
+ * itself was created but the follow-up activation step failed" from
+ * every other failure — see `finishAcceptInvite()` below.
+ */
+export interface AcceptInviteResult extends AuthActionResult {
+  /**
+   * True only when `supabase.auth.updateUser({ password })` already
+   * succeeded but `activate_own_profile()` did not. The password is
+   * already set at that point — `AcceptInviteForm` shows a distinct
+   * "Retry Activation" view (no password fields) rather than asking for
+   * the password again.
+   */
+  activationFailed?: boolean;
+}
+
+/**
+ * Shared tail end of invite acceptance, used by both `acceptInvite()`
+ * (right after the password is set) and `retryProfileActivation()` (the
+ * "Retry Activation" button, when only this step needs re-running).
+ * Calls `activate_own_profile()` — a SECURITY DEFINER RPC
+ * (supabase/migrations/0029_profile_activation.sql) that is the only
+ * path allowed to flip `profiles.active` true for an invited account,
+ * and only once, ever, per profile (see the migration's own comment) —
+ * this Server Action never writes `profiles.active` directly, and the
+ * client can never reach this table at all (`Insert`/`Update` are typed
+ * `never` — see docs/AUTH_ARCHITECTURE.md, "Profile Requirement
+ * Enforcement"). If activation fails, onboarding is deliberately left
+ * incomplete (not silently treated as done) so the caller can retry
+ * rather than land in a portal with a still-inactive profile.
+ */
+async function finishAcceptInvite(
+  supabase: Awaited<ReturnType<typeof getServerSupabaseClient>>,
+): Promise<AcceptInviteResult> {
+  const { error: activateError } = await supabase.rpc("activate_own_profile" as never);
+
+  if (activateError) {
+    logAuthEvent({ event: "accept_invite", code: "ACTIVATION_FAILED" });
+    return { success: false, activationFailed: true, message: getSafeAuthMessage("ACTIVATION_FAILED") };
+  }
+
+  const profile = await getCurrentProfile();
+
+  if (!profile) {
+    logAuthEvent({ event: "accept_invite", code: "PROFILE_MISSING" });
+    await supabase.auth.signOut();
+    return { success: false, message: getSafeAuthMessage("PROFILE_MISSING") };
+  }
+
+  if (!profile.active) {
+    // The RPC call itself didn't error, but the profile still isn't
+    // active — shouldn't happen given activate_own_profile()'s own
+    // logic, but treated as a retryable activation failure rather than
+    // silently granting or permanently denying access.
+    logAuthEvent({ event: "accept_invite", code: "ACTIVATION_FAILED" });
+    return { success: false, activationFailed: true, message: getSafeAuthMessage("ACTIVATION_FAILED") };
+  }
+
+  redirect(getRoleHome(profile.role));
+}
+
+/**
+ * Accept invite. Requires an active Supabase invite session (created by
+ * /auth/callback exchanging the emailed invite code, `next=/accept-invite`
+ * — see src/lib/actions/admin/accounts.ts's `redirectTo`) — this action
+ * does not accept an email or token itself, mirroring `updatePassword()`'s
+ * own session check. Deliberately does NOT sign the session back out on
+ * success, unlike `updatePassword()`: accepting an invite should land the
+ * invited coach/parent/student straight in their portal via
+ * `getRoleHome()`, not send them back through `/login`. See
+ * docs/AUTH_ARCHITECTURE.md, "Accept Invite Architecture".
+ */
+export async function acceptInvite(input: ResetPasswordValues): Promise<AcceptInviteResult> {
+  if (!isSupabaseConfigured()) {
+    return { success: false, message: getSafeAuthMessage("AUTH_UNAVAILABLE") };
+  }
+
+  const parsed = resetPasswordSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, message: getSafeAuthMessage("VALIDATION_FAILED") };
+  }
+
+  const supabase = await getServerSupabaseClient();
+  const { data: userData } = await supabase.auth.getUser();
+
+  if (!userData.user) {
+    // No valid invite session — the link was already used, expired, or
+    // never exchanged successfully.
+    logAuthEvent({ event: "accept_invite", code: "INVITE_EXPIRED" });
+    return { success: false, message: getSafeAuthMessage("INVITE_EXPIRED") };
+  }
+
+  const { error: passwordError } = await supabase.auth.updateUser({ password: parsed.data.password });
+
+  if (passwordError) {
+    logAuthEvent({ event: "accept_invite", code: "INVITE_EXPIRED" });
+    return { success: false, message: getSafeAuthMessage("INVITE_EXPIRED") };
+  }
+
+  return finishAcceptInvite(supabase);
+}
+
+/**
+ * "Retry Activation" action for `AcceptInviteForm` — used only after
+ * `acceptInvite()` already set the password successfully but
+ * `activate_own_profile()` failed. Does not accept or re-set a
+ * password; just re-verifies the session and re-runs activation.
+ */
+export async function retryProfileActivation(): Promise<AcceptInviteResult> {
+  if (!isSupabaseConfigured()) {
+    return { success: false, message: getSafeAuthMessage("AUTH_UNAVAILABLE") };
+  }
+
+  const supabase = await getServerSupabaseClient();
+  const { data: userData } = await supabase.auth.getUser();
+
+  if (!userData.user) {
+    logAuthEvent({ event: "accept_invite", code: "INVITE_EXPIRED" });
+    return { success: false, message: getSafeAuthMessage("INVITE_EXPIRED") };
+  }
+
+  return finishAcceptInvite(supabase);
+}
+
+/**
  * Logout. Redirects to the public homepage (chosen consistently over
  * `/login` — see docs/AUTH_ARCHITECTURE.md, "Logout Architecture").
  * Uses Supabase's own `signOut()` to clear the session through the
