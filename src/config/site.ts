@@ -18,8 +18,17 @@ export const siteConfig = {
   legalName: "Phoenix Chess Academy",
   description:
     "Phoenix Chess Academy trains disciplined, competitive chess players through professional coaching, structured student development, and state-level tournaments.",
-  domain: "phoenixchessacademy.org",
-  url: "https://phoenixchessacademy.org",
+  // Confirmed canonical production host is the `www` subdomain — this is
+  // the exact domain Supabase's Site URL / Redirect URL allow-list is
+  // configured for, and the one every invite/reset email link must
+  // resolve to. `getSiteUrl()` below only falls back to this constant
+  // when `NEXT_PUBLIC_SITE_URL` is missing/misconfigured in the actual
+  // deployment — keeping this fallback correct matters because a silent
+  // fallback to the wrong host would send every auth redirectTo (and
+  // every SEO canonical/sitemap/structured-data URL, which route through
+  // the same getSiteUrl()) to a domain Supabase never agreed to trust.
+  domain: "www.phoenixchessacademy.org",
+  url: "https://www.phoenixchessacademy.org",
   locale: "en",
   defaultTitle: "Phoenix Chess Academy | Professional Chess Training",
   titleTemplate: "%s | Phoenix Chess Academy",

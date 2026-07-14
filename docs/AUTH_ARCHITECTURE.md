@@ -273,7 +273,7 @@ in this codebase manually parses a JWT, stores a token in
 `supabase.auth.resetPasswordForEmail(email, { redirectTo })`, where
 `redirectTo` is built from `getSiteUrl()` (`src/config/site.ts` —
 resolves `NEXT_PUBLIC_SITE_URL`, falling back to the production
-`https://phoenixchessacademy.org`; already existed from Phase 7, reused
+`https://www.phoenixchessacademy.org`; already existed from Phase 7, reused
 as-is rather than duplicated) pointed at
 `/auth/callback?next=/reset-password`.
 
@@ -631,15 +631,16 @@ nested child components.
 1. Create/confirm the Supabase project referenced by
    `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 2. In Supabase Auth settings, confirm the **Site URL** and **Redirect
-   URLs** allow-list includes `https://phoenixchessacademy.org/auth/callback`
+   URLs** allow-list includes `https://www.phoenixchessacademy.org/auth/callback`
    (and `http://localhost:3000/auth/callback` for local dev) — Supabase
    rejects a redirect it hasn't been told to trust, independent of this
    app's own `resolveSafeInternalPath()` check.
-3. Confirm email sending is configured in Supabase (or a custom SMTP
-   provider) so `resetPasswordForEmail` actually delivers mail.
-4. Set `NEXT_PUBLIC_SITE_URL=https://phoenixchessacademy.org` in
-   production env vars (already documented in `.env.example` since
-   Phase 7).
+3. Configure Google Workspace SMTP (not Supabase's default mailer) so
+   `inviteUserByEmail`/`resetPasswordForEmail` reliably deliver mail — see
+   `docs/EMAIL_SMTP_CONFIGURATION.md` for the exact Dashboard values, DNS
+   records, and email template setup.
+4. Set `NEXT_PUBLIC_SITE_URL=https://www.phoenixchessacademy.org` in
+   production env vars (see `.env.example`).
 5. Run the First SUPER_ADMIN Bootstrap Procedure above.
 6. Execute the live test plan below.
 
